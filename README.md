@@ -1,0 +1,57 @@
+# Gerenciador de Tarefas
+
+Lista de tarefas simples em **um único arquivo HTML** — sem build, sem dependências,
+sem backend. As tarefas ficam salvas no `localStorage` do navegador.
+
+## Funcionalidades
+
+- Adicionar tarefa (botão ou <kbd>Enter</kbd>)
+- Marcar como concluída / desmarcar
+- Remover tarefa
+- Persistência automática entre sessões
+- Acessível por teclado e leitor de tela
+
+## Como rodar
+
+Basta abrir o `index.html` no navegador:
+
+```bash
+xdg-open index.html      # Linux
+# ou: open index.html    # macOS
+```
+
+Se preferir servir por HTTP (mais próximo do ambiente publicado):
+
+```bash
+python3 -m http.server 8000
+# acesse http://localhost:8000
+```
+
+## Publicando no GitHub Pages
+
+1. Suba o repositório para o GitHub.
+2. Em **Settings → Pages**, selecione a branch `main` e a pasta `/ (root)`.
+3. Em alguns instantes o site fica disponível em
+   `https://<seu-usuario>.github.io/<nome-do-repo>/`.
+
+Como o projeto é estático e autocontido, não é necessário nenhum passo de build.
+
+## Estrutura
+
+```
+index.html   # marcação, estilos e lógica — tudo aqui
+```
+
+## Notas técnicas
+
+- O texto das tarefas é inserido via `textContent`, nunca via `innerHTML`,
+  para que conteúdo digitado não seja interpretado como HTML.
+- Leitura e escrita no `localStorage` são protegidas por `try/catch`: dados
+  corrompidos ou armazenamento bloqueado (modo privado) não quebram a aplicação.
+- O DOM é a fonte da verdade do estado. Funciona bem nesta escala; caso a
+  aplicação ganhe edição, filtros ou reordenação, vale migrar para um array
+  de estado com uma função `render()`.
+
+## Licença
+
+MIT — veja [LICENSE](LICENSE).
