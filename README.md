@@ -7,7 +7,9 @@ sem backend. As tarefas ficam salvas no `localStorage` do navegador.
 
 - Adicionar tarefa (botão ou <kbd>Enter</kbd>)
 - Marcar como concluída / desmarcar
-- Remover tarefa
+- Contador de pendentes ("2 de 3 pendentes")
+- Remover tarefa com desfazer: a removida vai para **Removidas recentemente**,
+  de onde volta com um clique — com o estado de concluída que tinha
 - Persistência automática entre sessões
 - Acessível por teclado e leitor de tela
 
@@ -57,6 +59,9 @@ index.html   # marcação, estilos e lógica — tudo aqui
   escrita local sobrescreva as alterações vindas de fora.
 - Se o navegador bloquear o armazenamento, a aplicação continua utilizável e
   exibe um aviso informando que as alterações não serão preservadas.
+- A lixeira é uma rede de segurança para o clique errado, não um histórico:
+  guarda no máximo as 10 remoções mais recentes (`TRASH_LIMIT`), em chave
+  própria (`tasks-trash`), e as mais antigas saem conforme entram novas.
 
 ## Licença
 

@@ -59,7 +59,14 @@
         .actions { display: flex; gap: 5px; }
         .btn-del { background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 4px 8px; }
         .btn-done { background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 4px 8px; }
+        .btn-restore { background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 4px 8px; }
         :focus-visible { outline: 2px solid #0b5ed7; outline-offset: 2px; }
+        #counter {
+            margin: 0 0 0.5rem;
+            text-align: right;
+            color: #666;
+            font-size: 0.85rem;
+        }
         #empty-state {
             text-align: center;
             color: #888;
@@ -74,6 +81,40 @@
             border-radius: 4px;
             color: #6b5300;
             font-size: 0.85rem;
+        }
+        #trash {
+            margin-top: 1.5rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid #eee;
+        }
+        .trash-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 10px;
+        }
+        .trash-header h2 {
+            margin: 0;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: #888;
+        }
+        #clear-trash {
+            background: none;
+            border: none;
+            padding: 2px 4px;
+            color: #b02a37;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+        #clear-trash:hover { text-decoration: underline; }
+        #trash-list li {
+            border-bottom: none;
+            padding: 4px 8px;
+            font-size: 0.9rem;
+            color: #999;
         }
         .sr-only {
             position: absolute;
@@ -96,23 +137,36 @@
             <input type="text" id="task-input" placeholder="Nova tarefa..." autocomplete="off">
             <button id="add-btn" type="button">Adicionar</button>
         </div>
+        <p id="counter" role="status" hidden></p>
         <ul id="task-list"></ul>
         <p id="empty-state">Nenhuma tarefa ainda. Adicione a primeira acima.</p>
         <p id="storage-warning" role="status" hidden></p>
+
+        <section id="trash" hidden>
+            <div class="trash-header">
+                <h2>Removidas recentemente</h2>
+                <button id="clear-trash" type="button">Limpar</button>
+            </div>
+            <ul id="trash-list"></ul>
+        </section>
     </div>
 
     <script>
         const input = document.getElementById('task-input');
         const addBtn = document.getElementById('add-btn');
         const list = document.getElementById('task-list');
+        const counter = document.getElementById('counter');
         const emptyState = document.getElementById('empty-state');
         const storageWarning = document.getElementById('storage-warning');
+        const trashSection = document.getElementById('trash');
+        const trashList = document.getElementById('trash-list');
+        const clearTrashBtn = document.getElementById('clear-trash');
 
         const STORAGE_KEY = 'tasks';
-
-        function updateEmptyState() {
-            emptyState.hidden = list.children.length > 0;
-        }
+        const TRASH_KEY = 'tasks-trash';
+        // A lixeira é uma rede de segurança para o clique errado, não um
+        // histórico: guarda apenas as remoções mais recentes.
+        const TRASH_LIMIT = 10;
 
         function showStorageWarning() {
             if (!storageWarning.hidden) return;
@@ -127,16 +181,30 @@
             btn.setAttribute('aria-label', `${isDone ? 'Reabrir' : 'Concluir'} "${text}"`);
         }
 
+        function refreshUI() {
+            const total = list.children.length;
+            const pending = list.querySelectorAll('li:not(.completed)').length;
+
+            emptyState.hidden = total > 0;
+            counter.hidden = total === 0;
+            counter.textContent = pending === 0
+                ? 'Tudo concluído'
+                : `${pending} de ${total} pendente${pending > 1 ? 's' : ''}`;
+
+            trashSection.hidden = trashList.children.length === 0;
+        }
+
+        function serialize(ul) {
+            return Array.from(ul.querySelectorAll('li'), li => ({
+                text: li.querySelector('span').textContent,
+                completed: li.classList.contains('completed')
+            }));
+        }
+
         function saveTasks() {
-            const tasks = [];
-            list.querySelectorAll('li').forEach(li => {
-                tasks.push({
-                    text: li.querySelector('span').textContent,
-                    completed: li.classList.contains('completed')
-                });
-            });
             try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(serialize(list)));
+                localStorage.setItem(TRASH_KEY, JSON.stringify(serialize(trashList)));
             } catch (err) {
                 // Armazenamento bloqueado ou cota estourada: a lista segue
                 // utilizável na sessão, mas nada é persistido — avisar em vez
@@ -146,17 +214,21 @@
             }
         }
 
-        function loadTasks() {
-            let tasks = [];
+        function readStored(key) {
+            let data = [];
             try {
-                tasks = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+                data = JSON.parse(localStorage.getItem(key) || '[]');
             } catch (err) {
                 // Dados corrompidos não podem travar a inicialização.
-                console.warn('Dados salvos inválidos, começando do zero:', err);
+                console.warn(`Dados salvos inválidos em "${key}", começando do zero:`, err);
             }
-            if (!Array.isArray(tasks)) tasks = [];
-            tasks.forEach(task => addTask(task && task.text, task && task.completed));
-            updateEmptyState();
+            return Array.isArray(data) ? data : [];
+        }
+
+        function loadTasks() {
+            readStored(STORAGE_KEY).forEach(t => addTask(t && t.text, t && t.completed));
+            readStored(TRASH_KEY).forEach(t => addTrashItem(t && t.text, t && t.completed));
+            refreshUI();
         }
 
         function addTask(text, completed = false) {
@@ -177,6 +249,7 @@
             doneBtn.onclick = () => {
                 const isDone = li.classList.toggle('completed');
                 setDoneState(doneBtn, text, isDone);
+                refreshUI();
                 saveTasks();
             };
 
@@ -186,8 +259,11 @@
             delBtn.textContent = '✕';
             delBtn.setAttribute('aria-label', `Remover "${text}"`);
             delBtn.onclick = () => {
+                // Remover não descarta: a tarefa cai na lixeira, de onde pode
+                // voltar com o estado de concluída que tinha.
                 li.remove();
-                updateEmptyState();
+                addTrashItem(text, li.classList.contains('completed'), true);
+                refreshUI();
                 saveTasks();
             };
 
@@ -199,6 +275,46 @@
             list.appendChild(li);
         }
 
+        function addTrashItem(text, completed = false, prepend = false) {
+            text = String(text == null ? '' : text).trim();
+            if (!text) return;
+
+            const li = document.createElement('li');
+            if (completed) li.classList.add('completed');
+
+            const span = document.createElement('span');
+            span.textContent = text;
+
+            const restoreBtn = document.createElement('button');
+            restoreBtn.type = 'button';
+            restoreBtn.className = 'btn-restore';
+            restoreBtn.textContent = '↺';
+            restoreBtn.setAttribute('aria-label', `Restaurar "${text}"`);
+            restoreBtn.onclick = () => {
+                li.remove();
+                addTask(text, li.classList.contains('completed'));
+                refreshUI();
+                saveTasks();
+            };
+
+            const actions = document.createElement('div');
+            actions.className = 'actions';
+            actions.append(restoreBtn);
+
+            li.append(span, actions);
+
+            // Remoção recente entra no topo; o carregamento preserva a ordem salva.
+            if (prepend && trashList.firstChild) {
+                trashList.insertBefore(li, trashList.firstChild);
+            } else {
+                trashList.appendChild(li);
+            }
+
+            while (trashList.children.length > TRASH_LIMIT) {
+                trashList.lastElementChild.remove();
+            }
+        }
+
         addBtn.onclick = () => {
             const text = input.value.trim();
             if (!text) {
@@ -208,7 +324,13 @@
             addTask(text);
             input.value = '';
             input.focus();
-            updateEmptyState();
+            refreshUI();
+            saveTasks();
+        };
+
+        clearTrashBtn.onclick = () => {
+            trashList.innerHTML = '';
+            refreshUI();
             saveTasks();
         };
 
@@ -222,8 +344,9 @@
         // escreva um DOM desatualizado por cima das alterações de lá.
         // (key === null quando o armazenamento inteiro é limpo.)
         window.addEventListener('storage', (e) => {
-            if (e.key !== null && e.key !== STORAGE_KEY) return;
+            if (e.key !== null && e.key !== STORAGE_KEY && e.key !== TRASH_KEY) return;
             list.innerHTML = '';
+            trashList.innerHTML = '';
             loadTasks();
         });
 
