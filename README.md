@@ -62,6 +62,11 @@ index.html   # marcação, estilos e lógica — tudo aqui
 - A lixeira é uma rede de segurança para o clique errado, não um histórico:
   guarda no máximo as 10 remoções mais recentes (`TRASH_LIMIT`), em chave
   própria (`tasks-trash`), e as mais antigas saem conforme entram novas.
+- Esvaziar a lixeira é o único passo sem volta e por isso pede confirmação.
+  Ela é feita na própria página, e não com `confirm()`: o diálogo nativo
+  bloqueia a thread e não é estilizável. O foco vai para "Cancelar" e
+  <kbd>Esc</kbd> desfaz, de modo que a ação destrutiva exige um passo
+  deliberado.
 
 ## Licença
 

@@ -110,6 +110,39 @@
             cursor: pointer;
         }
         #clear-trash:hover { text-decoration: underline; }
+        #clear-confirm {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-top: 0.5rem;
+            padding: 8px 10px;
+            border: 1px solid #f1aeb5;
+            background: #fdf2f3;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            color: #6b2129;
+        }
+        .confirm-actions { display: flex; gap: 6px; }
+        #clear-yes {
+            padding: 4px 10px;
+            background: #b02a37;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+        #clear-no {
+            padding: 4px 10px;
+            background: white;
+            color: #333;
+            border: 1px solid #bbb;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
         #trash-list li {
             border-bottom: none;
             padding: 4px 8px;
@@ -147,6 +180,13 @@
                 <h2>Removidas recentemente</h2>
                 <button id="clear-trash" type="button">Limpar</button>
             </div>
+            <div id="clear-confirm" role="alert" hidden>
+                <span id="clear-confirm-msg"></span>
+                <span class="confirm-actions">
+                    <button id="clear-yes" type="button">Apagar</button>
+                    <button id="clear-no" type="button">Cancelar</button>
+                </span>
+            </div>
             <ul id="trash-list"></ul>
         </section>
     </div>
@@ -161,6 +201,10 @@
         const trashSection = document.getElementById('trash');
         const trashList = document.getElementById('trash-list');
         const clearTrashBtn = document.getElementById('clear-trash');
+        const clearConfirm = document.getElementById('clear-confirm');
+        const clearConfirmMsg = document.getElementById('clear-confirm-msg');
+        const clearYesBtn = document.getElementById('clear-yes');
+        const clearNoBtn = document.getElementById('clear-no');
 
         const STORAGE_KEY = 'tasks';
         const TRASH_KEY = 'tasks-trash';
@@ -181,6 +225,21 @@
             btn.setAttribute('aria-label', `${isDone ? 'Reabrir' : 'Concluir'} "${text}"`);
         }
 
+        // Esvaziar a lixeira é o único passo sem volta da aplicação, então
+        // pede confirmação explícita antes de apagar.
+        function setClearConfirm(active) {
+            clearTrashBtn.hidden = active;
+            clearConfirm.hidden = !active;
+            if (!active) return;
+
+            const n = trashList.children.length;
+            clearConfirmMsg.textContent = n === 1
+                ? 'Apagar a tarefa removida de vez?'
+                : `Apagar as ${n} tarefas removidas de vez?`;
+            // O foco vai para a saída segura: confirmar exige um passo a mais.
+            clearNoBtn.focus();
+        }
+
         function refreshUI() {
             const total = list.children.length;
             const pending = list.querySelectorAll('li:not(.completed)').length;
@@ -192,6 +251,9 @@
                 : `${pending} de ${total} pendente${pending > 1 ? 's' : ''}`;
 
             trashSection.hidden = trashList.children.length === 0;
+            // A lixeira pode esvaziar por outro caminho (restauração, outra
+            // aba) enquanto a confirmação está aberta.
+            if (trashList.children.length === 0) setClearConfirm(false);
         }
 
         function serialize(ul) {
@@ -328,11 +390,23 @@
             saveTasks();
         };
 
-        clearTrashBtn.onclick = () => {
+        clearTrashBtn.onclick = () => setClearConfirm(true);
+
+        clearNoBtn.onclick = () => {
+            setClearConfirm(false);
+            clearTrashBtn.focus();
+        };
+
+        clearYesBtn.onclick = () => {
             trashList.innerHTML = '';
+            setClearConfirm(false);
             refreshUI();
             saveTasks();
         };
+
+        clearConfirm.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') clearNoBtn.click();
+        });
 
         input.addEventListener('keydown', (e) => {
             // Com IME ativo (japonês, chinês, coreano), o Enter que confirma o
