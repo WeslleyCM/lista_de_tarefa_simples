@@ -231,15 +231,19 @@
 
         // Esvaziar a lixeira é o único passo sem volta da aplicação, então
         // pede confirmação explícita antes de apagar.
+        function updateClearConfirmMsg() {
+            const n = trashList.children.length;
+            clearConfirmMsg.textContent = n === 1
+                ? 'Apagar a tarefa removida de vez?'
+                : `Apagar as ${n} tarefas removidas de vez?`;
+        }
+
         function setClearConfirm(active) {
             clearTrashBtn.hidden = active;
             clearConfirm.hidden = !active;
             if (!active) return;
 
-            const n = trashList.children.length;
-            clearConfirmMsg.textContent = n === 1
-                ? 'Apagar a tarefa removida de vez?'
-                : `Apagar as ${n} tarefas removidas de vez?`;
+            updateClearConfirmMsg();
             // O foco vai para a saída segura: confirmar exige um passo a mais.
             clearNoBtn.focus();
         }
@@ -255,9 +259,11 @@
                 : `${pending} de ${total} pendente${pending > 1 ? 's' : ''}`;
 
             trashSection.hidden = trashList.children.length === 0;
-            // A lixeira pode esvaziar por outro caminho (restauração, outra
-            // aba) enquanto a confirmação está aberta.
+            // A lixeira pode mudar de tamanho — ou esvaziar — por outro caminho
+            // (remoção, restauração, outra aba) com a confirmação aberta. O
+            // número confirmado precisa ser o número que será apagado.
             if (trashList.children.length === 0) setClearConfirm(false);
+            else if (!clearConfirm.hidden) updateClearConfirmMsg();
         }
 
         function serialize(ul) {
@@ -268,13 +274,32 @@
         }
 
         function saveTasks() {
+            // As duas chaves têm de mudar juntas: se a segunda escrita falhasse
+            // com a primeira já gravada, uma tarefa recém-removida sumiria da
+            // lista sem ter entrado na lixeira — justamente o que a lixeira
+            // existe para evitar. Em caso de erro, desfaz o que já foi escrito.
+            const escritas = [];
+            let anterior = {};
             try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(serialize(list)));
+                anterior[TRASH_KEY] = localStorage.getItem(TRASH_KEY);
+                anterior[STORAGE_KEY] = localStorage.getItem(STORAGE_KEY);
+
                 localStorage.setItem(TRASH_KEY, JSON.stringify(serialize(trashList)));
+                escritas.push(TRASH_KEY);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(serialize(list)));
+                escritas.push(STORAGE_KEY);
             } catch (err) {
-                // Armazenamento bloqueado ou cota estourada: a lista segue
-                // utilizável na sessão, mas nada é persistido — avisar em vez
-                // de deixar o usuário confiar num save que não aconteceu.
+                escritas.forEach(key => {
+                    try {
+                        if (anterior[key] === null) localStorage.removeItem(key);
+                        else localStorage.setItem(key, anterior[key]);
+                    } catch (erroAoDesfazer) {
+                        // Armazenamento indisponível: não há o que reverter.
+                    }
+                });
+                // A lista segue utilizável na sessão, mas nada é persistido —
+                // avisar em vez de deixar o usuário confiar num save que não
+                // aconteceu.
                 console.warn('Não foi possível salvar as tarefas:', err);
                 showStorageWarning();
             }
@@ -406,10 +431,15 @@
             setClearConfirm(false);
             refreshUI();
             saveTasks();
+            // O elemento que tinha o foco acabou de ser escondido junto com a
+            // seção inteira; devolve o foco ao controle principal.
+            input.focus();
         };
 
-        clearConfirm.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') clearNoBtn.click();
+        // No documento, e não na faixa: o Esc precisa cancelar mesmo com o
+        // foco fora dela, como a interface promete.
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !clearConfirm.hidden) clearNoBtn.click();
         });
 
         input.addEventListener('keydown', (e) => {
