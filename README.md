@@ -48,9 +48,15 @@ index.html   # marcação, estilos e lógica — tudo aqui
   para que conteúdo digitado não seja interpretado como HTML.
 - Leitura e escrita no `localStorage` são protegidas por `try/catch`: dados
   corrompidos ou armazenamento bloqueado (modo privado) não quebram a aplicação.
-- O DOM é a fonte da verdade do estado. Funciona bem nesta escala; caso a
-  aplicação ganhe edição, filtros ou reordenação, vale migrar para um array
-  de estado com uma função `render()`.
+- O DOM é a fonte da verdade do estado, e cada alteração reserializa a lista
+  inteira. Funciona bem nesta escala; caso a aplicação ganhe edição, filtros
+  ou reordenação, vale migrar para um array de estado com uma função
+  `render()`.
+- Abas abertas em paralelo se mantêm em sincronia pelo evento `storage`:
+  quando uma aba grava, as outras recarregam a lista antes que a próxima
+  escrita local sobrescreva as alterações vindas de fora.
+- Se o navegador bloquear o armazenamento, a aplicação continua utilizável e
+  exibe um aviso informando que as alterações não serão preservadas.
 
 ## Licença
 

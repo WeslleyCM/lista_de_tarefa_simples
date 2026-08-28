@@ -66,6 +66,15 @@
             margin: 1rem 0 0;
             font-size: 0.9rem;
         }
+        #storage-warning {
+            margin: 1rem 0 0;
+            padding: 8px 10px;
+            border: 1px solid #d9a400;
+            background: #fff8e1;
+            border-radius: 4px;
+            color: #6b5300;
+            font-size: 0.85rem;
+        }
         .sr-only {
             position: absolute;
             width: 1px;
@@ -89,6 +98,7 @@
         </div>
         <ul id="task-list"></ul>
         <p id="empty-state">Nenhuma tarefa ainda. Adicione a primeira acima.</p>
+        <p id="storage-warning" role="status" hidden></p>
     </div>
 
     <script>
@@ -96,11 +106,25 @@
         const addBtn = document.getElementById('add-btn');
         const list = document.getElementById('task-list');
         const emptyState = document.getElementById('empty-state');
+        const storageWarning = document.getElementById('storage-warning');
 
         const STORAGE_KEY = 'tasks';
 
         function updateEmptyState() {
             emptyState.hidden = list.children.length > 0;
+        }
+
+        function showStorageWarning() {
+            if (!storageWarning.hidden) return;
+            storageWarning.textContent = 'Não foi possível salvar no navegador: '
+                + 'as alterações desta sessão serão perdidas ao fechar a página.';
+            storageWarning.hidden = false;
+        }
+
+        // O rótulo acompanha o estado: uma vez concluída, o botão reabre a tarefa.
+        function setDoneState(btn, text, isDone) {
+            btn.setAttribute('aria-pressed', String(isDone));
+            btn.setAttribute('aria-label', `${isDone ? 'Reabrir' : 'Concluir'} "${text}"`);
         }
 
         function saveTasks() {
@@ -114,9 +138,11 @@
             try {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
             } catch (err) {
-                // Modo privado, cota estourada ou armazenamento bloqueado:
-                // a lista continua funcionando na sessão atual.
+                // Armazenamento bloqueado ou cota estourada: a lista segue
+                // utilizável na sessão, mas nada é persistido — avisar em vez
+                // de deixar o usuário confiar num save que não aconteceu.
                 console.warn('Não foi possível salvar as tarefas:', err);
+                showStorageWarning();
             }
         }
 
@@ -147,11 +173,10 @@
             doneBtn.type = 'button';
             doneBtn.className = 'btn-done';
             doneBtn.textContent = '✓';
-            doneBtn.setAttribute('aria-label', `Concluir "${text}"`);
-            doneBtn.setAttribute('aria-pressed', String(Boolean(completed)));
+            setDoneState(doneBtn, text, Boolean(completed));
             doneBtn.onclick = () => {
                 const isDone = li.classList.toggle('completed');
-                doneBtn.setAttribute('aria-pressed', String(isDone));
+                setDoneState(doneBtn, text, isDone);
                 saveTasks();
             };
 
@@ -188,7 +213,18 @@
         };
 
         input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') addBtn.click();
+            // Com IME ativo (japonês, chinês, coreano), o Enter que confirma o
+            // candidato não deve adicionar a tarefa ainda em composição.
+            if (e.key === 'Enter' && !e.isComposing) addBtn.click();
+        });
+
+        // Outra aba gravou: recarrega antes que o próximo save desta aba
+        // escreva um DOM desatualizado por cima das alterações de lá.
+        // (key === null quando o armazenamento inteiro é limpo.)
+        window.addEventListener('storage', (e) => {
+            if (e.key !== null && e.key !== STORAGE_KEY) return;
+            list.innerHTML = '';
+            loadTasks();
         });
 
         loadTasks();
